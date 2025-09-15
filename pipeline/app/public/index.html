@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calidad del aire — Bogotá</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    header { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .panel { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+    label { display: grid; gap: 4px; font-size: 14px; }
+    select, input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; }
+    button { cursor: pointer; }
+    img { max-width: 100%; border-radius: 8px; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .kpis { display:flex; gap: 16px; flex-wrap: wrap; }
+    .kpi { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Calidad del aire — Bogotá</h1>
+    <span class="muted">Actualiza cada hora (GitHub Actions)</span>
+  </header>
+
+  <section class="panel">
+    <h2>Animación horaria</h2>
+    <div class="row">
+      <button id="refreshGif">Actualizar GIF</button>
+      <span class="muted">Fuente: ./gifs/latest.gif</span>
+    </div>
+    <img id="gif" src="./gifs/latest.gif" alt="Animación de calidad del aire" />
+  </section>
+
+  <section class="panel">
+    <h2>Estadísticas por periodo</h2>
+    <div class="row">
+      <label>Agregado
+        <select id="agg">
+          <option value="daily" selected>Diario</option>
+          <option value="weekly">Semanal</option>
+        </select>
+      </label>
+      <label>Contaminante
+        <select id="pollutant"></select>
+      </label>
+      <label>Desde
+        <input type="date" id="fromDate" />
+      </label>
+      <label>Hasta
+        <input type="date" id="toDate" />
+      </label>
+      <button id="load">Cargar</button>
+      <a id="downloadLink" class="muted" href="./data/daily.json" target="_blank">Descargar JSON</a>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+    <canvas id="chart" width="1000" height="420"></canvas>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
