@@ -1,0 +1,42 @@
+name: hourly-build
+
+on:
+  schedule:
+    - cron: "0 * * * *"    # cada hora (UTC)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TZ: America/Bogota
+      CONTAM: PM25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r pipeline/requirements_pipeline.txt
+
+      - name: Fetch data
+        run: python pipeline/data_fetch.py
+
+      - name: Export aggregates
+        run: python pipeline/export_aggregates.py
+
+      - name: Make GIF
+        run: python pipeline/make_gif.py
+
+      - name: Deploy /public to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          force_orphan: true
