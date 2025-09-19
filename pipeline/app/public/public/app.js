@@ -145,3 +145,141 @@ els.load.onclick = async () => {
 };
 
 els.load.click();
+// ===========================
+// MAPA DE BOGOTÁ CON LEAFLET
+// ===========================
+
+// 3.1 Límites de Bogotá (solo se ve Bogotá)
+const BOG_BOUNDS = L.latLngBounds(
+  // Suroeste (lat, lon), Noreste (lat, lon)
+  [4.45, -74.25],
+  [4.85, -73.95]
+);
+
+// 3.2 Inicializa el mapa dentro del <div id="map">
+const map = L.map("map", {
+  zoomControl: true,
+  maxBounds: BOG_BOUNDS.pad(0.02),   // un poquito de margen
+  maxBoundsViscosity: 1.0,           // “pared pegajosa” en los bordes
+  minZoom: 11,
+  maxZoom: 16,
+  worldCopyJump: false
+});
+map.fitBounds(BOG_BOUNDS);
+
+// 3.3 Capa base (OpenStreetMap) con atribución
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  detectRetina: true,
+}).addTo(map);
+
+// 3.4 Estaciones (usa exactamente los nombres de tu CSV de datos)
+const STATIONS = [
+  { name: "Usaquen",                 lat: 4.710350, lon: -74.030417 },
+  { name: "Carvajal - Sevillana",   lat: 4.595617, lon: -74.148583 },
+  { name: "Tunal",                   lat: 4.576225, lon: -74.130956 },
+  { name: "Centro de Alto Rendimiento", lat: 4.658467, lon: -74.083967 },
+  { name: "Las Ferias",             lat: 4.690700, lon: -74.082483 },
+  { name: "Guaymaral",              lat: 4.783756, lon: -74.044183 },
+  { name: "Kennedy",                 lat: 4.625050, lon: -74.161333 },
+  { name: "Suba",                    lat: 4.761247, lon: -74.093461 },
+  { name: "Puente Aranda",           lat: 4.631767, lon: -74.117483 },
+  { name: "MinAmbiente",             lat: 4.625486, lon: -74.066981 },
+  { name: "San Cristobal",           lat: 4.572553, lon: -74.083814 },
+  { name: "Movil 7ma",               lat: 4.642431, lon: -74.083967 },
+  { name: "Bolivia",                 lat: 4.735867, lon: -74.125883 },
+  { name: "Fontibon",                lat: 4.678242, lon: -74.143819 },
+  { name: "Usme",                    lat: 4.532000, lon: -74.116000 },
+  { name: "Jazmin",                  lat: 4.608000, lon: -74.115000 },
+  { name: "Ciudad Bolivar",          lat: 4.574000, lon: -74.166000 },
+  { name: "Colina",                  lat: 4.736000, lon: -74.070000 },
+  { name: "Movil Fontibon",          lat: 4.689000, lon: -74.148000 },
+];
+
+// 3.5 Helpers de colores por valor (igual que en tu GIF)
+function colorForValue(val) {
+  if (val == null || Number.isNaN(val)) return "#bdbdbd";
+  if (val < 50)  return "#4caf50"; // verde
+  if (val < 100) return "#f2c037"; // amarillo
+  return "#e53935";                // rojo
+}
+
+// 3.6 Capa de marcadores (la mantenemos para actualizar colores)
+let stationLayer = L.layerGroup().addTo(map);
+
+// 3.7 Pinta marcadores (puede recibir un mapa {nombreEstacion: valor} para colorear)
+function drawStations(valueByName = {}) {
+  stationLayer.clearLayers();
+  STATIONS.forEach(s => {
+    const v = valueByName[s.name];                 // valor (por contaminante elegido)
+    const marker = L.circleMarker([s.lat, s.lon], {
+      radius: 9,
+      color: "#333",
+      weight: 1,
+      fillColor: colorForValue(v),
+      fillOpacity: 0.8
+    });
+    const valText = (v == null || Number.isNaN(v)) ? "sin dato" : v;
+    marker.bindTooltip(`<b>${s.name}</b><br/>${valText}`);
+    marker.addTo(stationLayer);
+  });
+}
+
+// 3.8 Carga el snapshot más reciente y colorea según el contaminante seleccionado
+async function loadLatestAndColor() {
+  try {
+    // Tu pipeline guarda este CSV con separador ';'
+    const res = await fetch(`./data/Datos_Aire_latest.csv?ts=${Date.now()}`);
+    if (!res.ok) { drawStations(); return; }
+    const txt = await res.text();
+
+    // Parseo MUY sencillo del CSV con ';'
+    const lines = txt.trim().split(/\r?\n/);
+    const headers = lines[0].split(";").map(h => h.trim());
+    const rows = lines.slice(1).map(line => {
+      const cols = line.split(";").map(c => c.trim());
+      const obj = {};
+      headers.forEach((h,i)=> obj[h] = cols[i]);
+      return obj;
+    });
+
+    // contaminante elegido en tu UI existente
+    const pol = document.getElementById("pollutant")?.value || "PM25";
+
+    // Construye { name -> valorNum } para ese contaminante
+    const mapVals = {};
+    rows.forEach(r => {
+      const name = r["name"];
+      const raw  = r[pol];
+      const num  = raw === undefined ? NaN : Number(String(raw).replace(",", "."));
+      mapVals[name] = num;
+    });
+
+    drawStations(mapVals);
+  } catch (e) {
+    // si falla, dibuja sin colores
+    drawStations();
+  }
+}
+
+// 3.9 Inicializa y conecta con tu UI
+drawStations();          // dibuja una vez (grises)
+loadLatestAndColor();    // intenta colorear con último snapshot
+
+// Cuando cambias de contaminante en tu selector, recolorea marcadores
+const pollutantSel = document.getElementById("pollutant");
+if (pollutantSel) {
+  pollutantSel.addEventListener("change", () => {
+    loadLatestAndColor();
+  });
+}
+
+// Si ya tienes un botón "Cargar" que refresca el gráfico, aprovechamos para refrescar mapa
+const loadBtn = document.getElementById("load");
+if (loadBtn) {
+  loadBtn.addEventListener("click", () => {
+    loadLatestAndColor();
+  });
+}
+
