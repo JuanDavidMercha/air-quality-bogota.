@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calidad del aire — Bogotá</title>
+
+  <!-- Estilos básicos -->
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
     header { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -16,7 +18,30 @@
     .muted { color: #6b7280; font-size: 13px; }
     .kpis { display:flex; gap: 16px; flex-wrap: wrap; }
     .kpi { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; }
+    /* Contenedor del mapa EXACTO 800×600 y centrado */
+    .map-wrap { width: 100%; display: flex; justify-content: center; }
+    #map { width: 800px; height: 600px; border-radius: 12px; border: 1px solid #e5e7eb; }
+    /* Leyenda Leaflet */
+    .legend { background: white; padding: 6px 8px; border-radius: 8px; border: 1px solid #e5e7eb; line-height: 1.2; }
+    .legend .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    .dot { display:inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #111; }
   </style>
+
+  <!-- Leaflet (mapas) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- Chart.js para el gráfico (lo usa app.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header>
@@ -24,6 +49,7 @@
     <span class="muted">Actualiza cada hora (GitHub Actions)</span>
   </header>
 
+  <!-- Panel GIF -->
   <section class="panel">
     <h2>Animación horaria</h2>
     <div class="row">
@@ -33,6 +59,7 @@
     <img id="gif" src="./gifs/latest.gif" alt="Animación de calidad del aire" />
   </section>
 
+  <!-- Panel Estadísticas -->
   <section class="panel">
     <h2>Estadísticas por periodo</h2>
     <div class="row">
@@ -59,7 +86,223 @@
     <canvas id="chart" width="1000" height="420"></canvas>
   </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Panel Mapa -->
+  <section class="panel">
+    <h2>Mapa (Bogotá)</h2>
+    <div class="map-wrap">
+      <div id="map"></div>
+    </div>
+    <p class="muted">Mapa: © OpenStreetMap contributors</p>
+  </section>
+
+  <!-- Tu lógica existente (gráfico/tabla) -->
   <script type="module" src="./app.js"></script>
+
+  <!-- === LÓGICA DEL MAPA (integrada aquí) === -->
+  <script type="module">
+    // ======= Configuración general =======
+    const POLLUTANT_SELECT = document.getElementById("pollutant");
+    const LOAD_BTN = document.getElementById("load");
+
+    // Límite para "solo Bogotá"
+    const BOG_BOUNDS = L.latLngBounds([4.45, -74.25], [4.85, -73.95]);
+
+    // Mapa Leaflet
+    const map = L.map("map", {
+      zoomControl: true,
+      maxBounds: BOG_BOUNDS.pad(0.02),
+      maxBoundsViscosity: 1.0,
+      minZoom: 11,
+      maxZoom: 16,
+      worldCopyJump: false
+    });
+    map.fitBounds(BOG_BOUNDS);
+
+    // Capa base OSM
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      detectRetina: true
+    }).addTo(map);
+
+    // Lista de estaciones (nombres EXACTOS como en los CSV)
+    const STATIONS = [
+      { name: "Usaquen",                 lat: 4.710350, lon: -74.030417 },
+      { name: "Carvajal - Sevillana",   lat: 4.595617, lon: -74.148583 },
+      { name: "Tunal",                   lat: 4.576225, lon: -74.130956 },
+      { name: "Centro de Alto Rendimiento", lat: 4.658467, lon: -74.083967 },
+      { name: "Las Ferias",             lat: 4.690700, lon: -74.082483 },
+      { name: "Guaymaral",              lat: 4.783756, lon: -74.044183 },
+      { name: "Kennedy",                 lat: 4.625050, lon: -74.161333 },
+      { name: "Suba",                    lat: 4.761247, lon: -74.093461 },
+      { name: "Puente Aranda",           lat: 4.631767, lon: -74.117483 },
+      { name: "MinAmbiente",             lat: 4.625486, lon: -74.066981 },
+      { name: "San Cristobal",           lat: 4.572553, lon: -74.083814 },
+      { name: "Movil 7ma",               lat: 4.642431, lon: -74.083967 },
+      { name: "Bolivia",                 lat: 4.735867, lon: -74.125883 },
+      { name: "Fontibon",                lat: 4.678242, lon: -74.143819 },
+      { name: "Usme",                    lat: 4.532000, lon: -74.116000 },
+      { name: "Jazmin",                  lat: 4.608000, lon: -74.115000 },
+      { name: "Ciudad Bolivar",          lat: 4.574000, lon: -74.166000 },
+      { name: "Colina",                  lat: 4.736000, lon: -74.070000 },
+      { name: "Movil Fontibon",          lat: 4.689000, lon: -74.148000 },
+    ];
+
+    // Capas para estaciones y viento
+    const stationLayer = L.layerGroup().addTo(map);
+    const windLayer = L.layerGroup().addTo(map);
+
+    // Leyenda de colores por concentración
+    const legend = L.control({ position: "bottomleft" });
+    legend.onAdd = function () {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `
+        <div><b>Concentración</b></div>
+        <div class="row"><span class="dot" style="background:#4caf50"></span><span>&lt; 50</span></div>
+        <div class="row"><span class="dot" style="background:#f2c037"></span><span>50 – 99</span></div>
+        <div class="row"><span class="dot" style="background:#e53935"></span><span>≥ 100</span></div>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:6px 0;">
+        <div><small>Flecha = viento (longitud ≈ velocidad)</small></div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+
+    // Color por valor del contaminante
+    function colorForValue(val) {
+      if (val == null || Number.isNaN(val)) return "#bdbdbd";
+      if (val < 50)  return "#4caf50";
+      if (val < 100) return "#f2c037";
+      return "#e53935";
+    }
+
+    // Parseo sencillo de CSV con ';'
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (!lines.length) return [];
+      const headers = lines[0].split(";").map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const cols = line.split(";").map(c => c.trim());
+        const obj = {};
+        headers.forEach((h,i)=> obj[h] = cols[i]);
+        return obj;
+      });
+    }
+
+    // Mover un punto lat/lon por distancia (m) y rumbo (grados)
+    function movePoint(lat, lon, distMeters, bearingDeg) {
+      const R = 6371000; // m
+      const br = bearingDeg * Math.PI/180;
+      const lat1 = lat * Math.PI/180;
+      const lon1 = lon * Math.PI/180;
+      const dr = distMeters / R;
+
+      const lat2 = Math.asin( Math.sin(lat1)*Math.cos(dr) + Math.cos(lat1)*Math.sin(dr)*Math.cos(br) );
+      const lon2 = lon1 + Math.atan2(
+        Math.sin(br)*Math.sin(dr)*Math.cos(lat1),
+        Math.cos(dr)-Math.sin(lat1)*Math.sin(lat2)
+      );
+      return { lat: lat2*180/Math.PI, lon: lon2*180/Math.PI };
+    }
+
+    // Dibuja una flecha simple (línea + cabecita) de A->B
+    function drawArrow(lat1, lon1, lat2, lon2, color="#111") {
+      // tronco
+      L.polyline([[lat1,lon1],[lat2,lon2]], {color, weight: 2, opacity: 0.95}).addTo(windLayer);
+      // cabeza
+      const bearing = (Math.atan2(lon2-lon1, lat2-lat1) * 180/Math.PI);
+      const headLen = 80; // metros para la cabecita
+      const left = movePoint(lat2, lon2, headLen, bearing* -1 + 150);
+      const right = movePoint(lat2, lon2, headLen, bearing* -1 - 150);
+      L.polyline([[lat2,lon2],[left.lat,left.lon]], {color, weight: 2, opacity: 0.95}).addTo(windLayer);
+      L.polyline([[lat2,lon2],[right.lat,right.lon]], {color, weight: 2, opacity: 0.95}).addTo(windLayer);
+    }
+
+    // Dibuja estaciones y viento usando los "latest" CSV
+    async function refreshMapFromLatest() {
+      stationLayer.clearLayers();
+      windLayer.clearLayers();
+
+      // Lee CSV más reciente (aire y met)
+      const pol = POLLUTANT_SELECT?.value || "PM25";
+
+      let aireRows = [];
+      let metRows  = [];
+      try {
+        const [rA, rM] = await Promise.all([
+          fetch(`./data/Datos_Aire_latest.csv?ts=${Date.now()}`),
+          fetch(`./data/Datos_Meteorologicos_latest.csv?ts=${Date.now()}`)
+        ]);
+        if (rA.ok) aireRows = parseCSV(await rA.text());
+        if (rM.ok) metRows  = parseCSV(await rM.text());
+      } catch (e) { /* sin datos, seguimos */ }
+
+      // Índices por nombre
+      const aireByName = new Map();
+      aireRows.forEach(r => aireByName.set(r["name"], r));
+      const metByName = new Map();
+      metRows.forEach(r => metByName.set(r["name"], r));
+
+      // Dibuja cada estación
+      STATIONS.forEach(s => {
+        const air = aireByName.get(s.name);
+        const met = metByName.get(s.name);
+
+        // Valor del contaminante (parsea coma/punto)
+        let val = NaN;
+        if (air && pol in air) {
+          val = Number(String(air[pol]).replace(",", "."));
+        }
+
+        const marker = L.circleMarker([s.lat, s.lon], {
+          radius: 9,
+          color: "#333",
+          weight: 1,
+          fillColor: colorForValue(val),
+          fillOpacity: 0.85
+        }).addTo(stationLayer);
+
+        // Tooltip con concentración y (si hay) viento
+        let tip = `<b>${s.name}</b>`;
+        tip += `<br/>${pol}: ${Number.isNaN(val) ? "sin dato" : val}`;
+        let vel = null, dir = null;
+        if (met) {
+          if ("Vel Viento" in met) vel = Number(String(met["Vel Viento"]).replace(",", "."));
+          if ("Dir Viento" in met) dir = Number(String(met["Dir Viento"]).replace(",", "."));
+          if (vel !== null && dir !== null && vel !== -9999 && dir !== -9999) {
+            tip += `<br/>Viento: ${vel.toFixed(1)} m/s @ ${dir}°`;
+            // Dibuja vector (longitud ~ velocidad; 250 m por cada m/s)
+            const dist = Math.max(vel, 0) * 250;
+            const end = movePoint(s.lat, s.lon, dist, 360 - dir); // 360-dir para sentido "hacia donde sopla"
+            drawArrow(s.lat, s.lon, end.lat, end.lon, "#111");
+          }
+        }
+        marker.bindTooltip(tip, {direction: "top", offset: [0,-6]});
+      });
+    }
+
+    // Eventos para refrescar el mapa (mismo flujo que tus filtros)
+    if (POLLUTANT_SELECT) {
+      POLLUTANT_SELECT.addEventListener("change", refreshMapFromLatest);
+    }
+    if (LOAD_BTN) {
+      LOAD_BTN.addEventListener("click", refreshMapFromLatest);
+    }
+
+    // Carga inicial
+    refreshMapFromLatest();
+
+    // Botón para el GIF (de tu UI original)
+    const gifEl = document.getElementById("gif");
+    const refreshGif = document.getElementById("refreshGif");
+    if (gifEl && refreshGif) {
+      refreshGif.onclick = () => {
+        const u = new URL("./gifs/latest.gif", location.href);
+        u.searchParams.set("t", Date.now().toString());
+        gifEl.src = u.toString();
+      };
+    }
+  </script>
 </body>
 </html>
+
